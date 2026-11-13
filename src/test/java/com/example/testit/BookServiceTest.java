@@ -38,23 +38,23 @@ class BookServiceTest {
     BookService bookService;
 
     @Test
-    void emprunterUnLivreDisponible() {
+    void fatouEmprunteUnLivreDisponibleEtRecoitUnMail() {
         // GIVEN : un livre disponible et un membre
-        Book dune = new Book("Dune", "Frank Herbert");
-        dune.setId(1L);
-        Member alice = new Member("alice");
-        alice.setId(10L);
+        Book lettre = new Book("Une si longue lettre", "Mariama Bâ");
+        lettre.setId(5L);
+        Member fatou = new Member("fatou");
+        fatou.setId(42L);
 
-        when(bookRepository.findById(1L)).thenReturn(Optional.of(dune));
-        when(memberRepository.findById(10L)).thenReturn(Optional.of(alice));
+        when(bookRepository.findById(5L)).thenReturn(Optional.of(lettre));
+        when(memberRepository.findById(42L)).thenReturn(Optional.of(fatou));
         when(bookRepository.save(any(Book.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // WHEN : Alice emprunte Dune
-        Book resultat = bookService.borrowBook(1L, 10L);
+        // WHEN : Fatou emprunte le livre
+        Book resultat = bookService.borrowBook(5L, 42L);
 
         // THEN : statut, emprunteur et mail
         assertThat(resultat.getStatus()).isEqualTo(Status.EMPRUNTE);
-        assertThat(resultat.getBorrower()).isSameAs(alice);
-        verify(mailService).sendMail(eq(alice), anyString(), anyString());
+        assertThat(resultat.getBorrower()).isSameAs(fatou);
+        verify(mailService).sendMail(eq(fatou), anyString(), anyString());
     }
 }
