@@ -170,3 +170,28 @@ le schéma étape par étape (bugs 2.1 à 2.5) avant de révéler le bug de la r
   le proxy ne peut plus se charger.
 - **Pourquoi l'exercice 1 ne l'a pas vu :** avec des mocks, il n'y a ni base ni proxy Hibernate.
 - **Correction :** ajout de `@Transactional` sur la classe `BookService`.
+## Exercice 4 : `BookControllerIT` (API REST, MockMvc)
+
+Bugs repérés et documentés, **non corrigés** dans le code.
+
+### Bug 4.1 : l'auteur reçoit le titre à la création
+
+- **Test :** `fatouCreeUnLivrePuisLEmprunteViaLApi`
+- **Requête :** `POST /books` avec `{"title":"Une si longue lettre","author":"Mariama Bâ"}`
+- **Erreur :** `JSON path "$.author" expected:<Mariama Bâ> but was:<Une si longue lettre>`
+- **Explication :** dans `BookController.createBook`, le service est appelé avec
+  `request.title` deux fois : `createBook(request.title, request.title)`.
+- **Correction proposée :** `createBook(request.title, request.author)`.
+
+### Bug 4.2 : `/borrow` rend le livre au lieu de l'emprunter
+
+- **Requête :** `POST /books/{id}/borrow`
+- **Erreur :** `Status expected:<200> but was:<400>`
+- **Explication :** l'endpoint `/borrow` appelle `bookService.returnBook(...)` au lieu de
+  `bookService.borrowBook(...)`. Le livre étant DISPONIBLE, le retour est refusé
+  (`IllegalStateException`), et le controller répond 400.
+- **Comment il a été trouvé :** visible seulement après avoir corrigé temporairement
+  le bug 4.1, car le test s'arrête à la première vérification qui échoue.
+- **Correction proposée :** `/borrow` doit appeler `bookService.borrowBook(id, memberId)`.
+
+**Statut :** test laissé en rouge (échoue sur le bug 4.1).
