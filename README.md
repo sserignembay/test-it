@@ -79,3 +79,80 @@ Dans l'ordre que vous voulez, un test par idée :
 - Un test = un comportement. Structure *Given / When / Then*.
 - Un test que vous n'avez jamais vu échouer ne prouve rien : cassez volontairement le service pour vérifier qu'il devient rouge.
 - Ne testez pas vos mocks : testez une décision du code (un `if`, un calcul, un appel ou un non-appel).
+
+---
+
+# Bugs trouvés par les tests
+
+## Exercice 1 : `BookServiceTest` (test unitaire, Mockito)
+
+### Bug 1.1 : aucun mail envoyé lors d'un emprunt
+
+- **Test :** `fatouEmprunteUnLivreDisponibleEtRecoitUnMail`
+- **Scénario :** Fatou emprunte « Une si longue lettre », qui est disponible.
+- **Erreur :** `Wanted but not invoked: mailService.sendMail(...) — Actually, there were zero interactions with this mock.`
+- **Ce que ça révèle :** le statut (EMPRUNTE) et l'emprunteur (Fatou) sont corrects,
+  mais **aucun mail n'est envoyé au membre**.
+- **Le code ou le test ?** Le **code** : le README impose un mail au membre lors d'un emprunt,
+  or `borrowBook` n'appelle jamais `mailService.sendMail(...)`.
+- **Correction proposée :** dans `BookService.borrowBook`, après `bookRepository.save(book)`, ajouter
+  `mailService.sendMail(member, "Livre emprunté", "Vous avez emprunté '" + book.getTitle() + "'.");`
+- **Statut :** bug documenté, test laissé en rouge.
+
+## Exercice 2 : `BookRepositoryIT` (test JPA, vraie base H2)
+
+Le test n'a d'abord **pas pu démarrer** : la base ne se créait pas. Il a fallu corriger
+le schéma étape par étape (bugs 2.1 à 2.5) avant de révéler le bug de la requête (2.6).
+
+### Bug 2.1 : clés étrangères sans nom
+
+- **Erreur :** `Attribute 'constraintName' must appear on element 'addForeignKeyConstraint'`
+- **Où :** `001-create-members-table.xml` et `002-create-book-table.xml`
+- **Explication :** Liquibase exige un nom pour chaque clé étrangère ; sans nom, il refuse de lire le fichier.
+- **Correction :** ajout de `constraintName="fk_members_referent"` (001) et `constraintName="fk_book_borrower"` (002).
+
+### Bug 2.2 : types incompatibles pour le référent
+
+- **Erreur :** `Values of types "UUID" and "BIGINT" are not comparable`
+- **Où :** `001-create-members-table.xml`
+- **Explication :** `referent_id` est en `uuid` alors qu'il pointe vers `members.id` qui est un `bigint`.
+  Une clé étrangère exige le même type des deux côtés.
+- **Correction :** `referent_id` passe en `type="bigint"`.
+
+### Bug 2.3 : nom de table différent
+
+- **Erreur :** `Schema validation: missing table [member]`
+- **Où :** `Member.java`
+- **Explication :** Liquibase crée la table `members`, mais l'entité `Member` cherche par défaut
+  une table `member`. Hibernate (mode `validate`) refuse de démarrer.
+- **Correction :** ajout de `@Table(name = "members")` sur la classe `Member`.
+
+### Bug 2.4 : nom de colonne différent
+
+- **Erreur :** `Schema validation: missing column [username] in table [members]`
+- **Où :** `001-create-members-table.xml`
+- **Explication :** la colonne s'appelle `user` alors que l'entité a un champ `username`.
+  De plus, `USER` est un mot réservé en SQL.
+- **Correction :** la colonne est renommée `username`.
+
+### Bug 2.5 : génération d'id incohérente
+
+- **Erreur :** `Schema validation: missing sequence [book_seq]`
+- **Où :** `Book.java`
+- **Explication :** l'entité utilise `GenerationType.SEQUENCE` (compteur séparé `book_seq`),
+  alors que la table `book` est en auto-incrément. La séquence n'existe pas.
+- **Correction :** `GenerationType.SEQUENCE` → `GenerationType.IDENTITY` (comme `Member`).
+
+### Bug 2.6 : la requête `findByMemberAndStatus` utilise OR au lieu de AND
+
+- **Test :** `findByMemberAndStatusNeRenvoieQueLesLivresEmpruntesParFatou`
+- **Scénario :** 2 membres (Fatou, Moussa) et 4 livres ; on cherche les livres EMPRUNTÉS par Fatou.
+- **Erreur :** attendu `["L'Aventure ambiguë"]`, obtenu
+  `["L'Aventure ambiguë", "Une si longue lettre", "Les Bouts de bois de Dieu"]`.
+- **Explication :** la requête renvoie les livres du membre **ou** ayant ce statut,
+  au lieu des livres du membre **et** ayant ce statut. Le second membre (Moussa)
+  était indispensable pour révéler le problème.
+- **Conséquence dans l'appli :** le service s'appuie sur cette requête pour vérifier
+  qu'un membre n'a pas déjà un livre emprunté : la règle métier est faussée.
+- **Correction :** `OR` → `AND` dans `BookRepository`.
+- **Statut :** corrigé, test vert .
