@@ -156,3 +156,17 @@ le schéma étape par étape (bugs 2.1 à 2.5) avant de révéler le bug de la r
   qu'un membre n'a pas déjà un livre emprunté : la règle métier est faussée.
 - **Correction :** `OR` → `AND` dans `BookRepository`.
 - **Statut :** corrigé, test vert .
+
+## Exercice 3 : `BookServiceIT` (contexte Spring complet, vraie base)
+
+### Bug 3.1 : `LazyInitializationException` au retour d'un livre
+
+- **Test :** `fatouEmpruntepuisRendLeLivreQuiFinitRendu`
+- **Scénario :** Fatou emprunte puis rend « Le Ventre de l'Atlantique ».
+- **Erreur :** `LazyInitializationException: Could not initialize proxy [Member#1] - no session`
+- **Explication :** l'emprunteur d'un livre est chargé en `LAZY` (proxy vide).
+  `BookService` n'est pas transactionnel : la session Hibernate est fermée après
+  `findById`. Quand `returnBook` envoie le mail et lit `member.getUsername()`,
+  le proxy ne peut plus se charger.
+- **Pourquoi l'exercice 1 ne l'a pas vu :** avec des mocks, il n'y a ni base ni proxy Hibernate.
+- **Correction :** ajout de `@Transactional` sur la classe `BookService`.
